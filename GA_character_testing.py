@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-import random
 import sys
-import os
+import requests
+import simulations
 
 BATTLEID_TITLE = 'BattleId'
 JOBID_TITLE = 'JobId'
@@ -15,19 +15,23 @@ RETURN_DAMAGE = 'Damage'
 
 battle_id = 0
 population_warning = True
+job_to_skills = {}
 
+# parameters:
 population_size = 100
+mutation_percentage = 0.5
 
 """
 read data from excel
 returns a dictionary of job_id to list of skill_ids
 """
 def read_data(file_path):
+    global battle_id
+    global job_to_skills
+    print(f"reading data from {file_path}...")
     xls = pd.ExcelFile(file_path)
     jobs = pd.read_excel(xls, 'job')
     skills = pd.read_excel(xls, 'skill')
-
-    job_to_skills = {}
 
     # just take the first 7
     for i in range(8):
@@ -42,23 +46,25 @@ def read_data(file_path):
         assert job_id in job_to_skills, f"job_id {job_id} not in job_to_skills"
         job_to_skills[job_id].append(skill_id)
 
-    return job_to_skills
-
 """
 generates a random population of size n
 sample template: '[{"BattleId":1,"Characters":[{"JobId":14,"Skills":[109,110,111,112]},{"JobId":15,"Skills":[104,103,106,107]},{"JobId":16,"Skills":[446,448,449,447]},{"JobId":17,"Skills":[1116,1119,1117,1118]}]}]'
 """
-def generate_population(population_size, job_to_skills):
+def generate_first_population(population_size):
+    global battle_id
+    global job_to_skills
     population = []
     for i in range(population_size):
-        population.append(generate_character(job_to_skills))
-    return population
+        population.append(generate_character())
+    return population, generate_id_to_idx(population)
 
 """
 generates a random character
 sample template: {"BattleId":1,"Characters":[{"JobId":14,"Skills":[109,110,111,112]},{"JobId":15,"Skills":[104,103,106,107]},{"JobId":16,"Skills":[446,448,449,447]},{"JobId":17,"Skills":[1116,1119,1117,1118]}]}
 """
-def generate_character(job_to_skills):
+def generate_character():
+    global battle_id
+    global job_to_skills
     character = {}
     character[BATTLEID_TITLE] = battle_id
     battle_id += 1
@@ -76,8 +82,9 @@ the function that converts population into json and tests
 returns json file
 sample template: [{"BattleId":1,"Result":1,"Milliseconds":158000,"Damage":1111111111}]
 """
-def test_population(population, batch_size):
-    pass
+def test_population(population):
+    url = 'http://10.41.0.159:8080/simulator'
+    results = simulations.get_results(population, url)
 
 """
 sorts the population by fitness
@@ -103,19 +110,24 @@ returns a new population
     mutation_percentage: percentage of population to mutate
     crossover_percentage: percentage of population to crossover as the total population
 """
-def generate_new_population(prev_population, fitness, keep_percentage, dead_percentage, mutation_percentage, population_size):
+def generate_new_population(prev_population, fitness, keep_percentage, dead_percentage, mutation_percentage, population_size, id_to_idx):
+    global battle_id
+    global job_to_skills
     if(keep_percentage != dead_percentage and population_warning):
         sys.stderr.write(f'[WARNING]: {keep_percentage} DOES NOT EQUAL TO {dead_percentage}, WILL CAUSE POPULATION SIZE TO VARY')
         population_warning = False
+
     new_population = []
     for i in range(int(keep_percentage * population_size)):
-        new_character = prev_population[fitness[i][0]]
+        idx = id_to_idx[fitness[i][0]]
+        new_character = prev_population[idx]
         new_character[BATTLEID_TITLE] = battle_id
         battle_id += 1
         new_population.append(new_character)
-    one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size)
-    mutation(new_population)
-    return new_population
+    one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size, id_to_idx)
+    mutation(new_population, mutation_percentage)
+
+    return new_population, generate_id_to_idx(new_population)
 
 """
 generates a portion of the new population by one point crossover
@@ -127,7 +139,9 @@ returns a list of new characters
     dead_population: number of population to kill
     population_size: total population size
 """     
-def one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size):
+def one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size, id_to_idx):
+    global battle_id
+    global job_to_skills
     assert dead_percentage < 1 and dead_percentage > 0, f'you have to take out at least some of the bad genes man... but you can\'t take out more than the entire population'
     
     # loop through all but the last dead population, onepoint crossover with the next one, then append the new character to the list
@@ -136,7 +150,7 @@ def one_point_crossover(new_population, prev_population, fitness, dead_percentag
         new_character[BATTLEID_TITLE] = battle_id
         battle_id += 1
         # take previous population index i, and randomly choose one_point_crossover with i+1, majority inherited from parent1 
-        idx = fitness[i][0]
+        idx = id_to_idx[fitness[i][0]]
         parent1, parent2 = prev_population[idx], prev_population[idx+1]
         crossover_trait = np.random.randint(0,4)
         new_character_jobs = []
@@ -145,18 +159,52 @@ def one_point_crossover(new_population, prev_population, fitness, dead_percentag
         new_character[CHARACTER_TITLE] = new_character_jobs
         new_population.append(new_character)
 
-
+def generate_id_to_idx(population):
+    new_id_to_idx = {}
+    for i, battle in enumerate(population):
+        new_id_to_idx[battle[BATTLEID_TITLE]] = i
+    return new_id_to_idx
 
 """
-take the 
+take the top n groups and store them
 """
-def store_population(filename, population_to_store, fitness, prev_population):
+def store_population(filename, population_to_store, fitness, prev_population, generation, id_to_idx):
     assert len(prev_population) > population_to_store, f'the population you wish to store: {population_to_store} is greater than the total population size: {len(prev_population)}'
-    pass
+    with open(filename, 'a') as f:
+        f.write(f"Generation: {generation}\n")
+        for i in range(population_to_store):
+            idx = id_to_idx[fitness[i][0]]
+            f.write(population_to_store[idx])
+        f.write('\n')
 
-def mutation():
-    pass
+
+"""
+Randomly changes certain jobs in a team with a new job that is not in the exisiting party
+"""
+def mutation(new_population, mutation_percentage):
+    assert mutation_percentage < 1 and mutation_percentage >= 0, f'{mutation_percentage} must be a percent value greater than or equal to 0 and less than 1'
+    to_mutate = np.random.choice(len(new_population), int(mutation_percentage * len(new_population)))
+    for idx in to_mutate:
+        character = new_population[idx][CHARACTER_TITLE]
+        existing_jobs = [job[JOBID_TITLE] for job in character]
+        while True:
+            job_id = np.random.choice(list(job_to_skills.keys()), 1, replace=False)
+            if job_id not in existing_jobs: break
+        job_id = job_id[0]
+        print(job_id)
+        job = {}
+        job[JOBID_TITLE] = job_id
+        job[SKILL_TITLE] = np.random.choice(job_to_skills[job_id], 4, replace=False).tolist()
+        character[np.random.randint(0,4)] = job
 
 
 if __name__ == '__main__':
-    pass
+    
+    read_data('job-skill.xlsx')
+    population, id_to_idx = generate_first_population(10)
+
+    print(population)
+
+    mutation(population, mutation_percentage)
+    
+    print(population)
