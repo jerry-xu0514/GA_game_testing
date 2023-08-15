@@ -191,7 +191,6 @@ def mutation(new_population, mutation_percentage):
             job_id = np.random.choice(list(job_to_skills.keys()), 1, replace=False)
             if job_id not in existing_jobs: break
         job_id = job_id[0]
-        print(job_id)
         job = {}
         job[JOBID_TITLE] = job_id
         job[SKILL_TITLE] = np.random.choice(job_to_skills[job_id], 4, replace=False).tolist()
