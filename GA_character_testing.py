@@ -10,7 +10,7 @@ SKILL_TITLE = 'Skills'
 CHARACTER_TITLE = 'Characters'
 
 RETURN_TIME = 'Milliseconds'
-RETURN_RESULT = 'result'
+RETURN_RESULT = 'Result'
 RETURN_DAMAGE = 'Damage'
 
 battle_id = 0
@@ -20,6 +20,7 @@ job_to_skills = {}
 # parameters:
 population_size = 100
 mutation_percentage = 0.5
+iterations = 20
 
 """
 read data from excel
@@ -94,8 +95,8 @@ return template [(battle_id, fitness_value)]
 def fitness_func(battle_results, max_damage): #TODO: temp max_damage, can replace with max damage dealt instead of true max damage
     fitness = []
     for i, e in enumerate(battle_results):
-        fitness_value = 1 + 1 / int(e[RETURN_TIME]/1000) if e[RETURN_RESULT] else e[RETURN_RESULT]/ max_damage
-        fitness.append((battle_results[BATTLEID_TITLE], fitness_value))
+        fitness_value = 2 + 1 / int(e[RETURN_TIME]/1000) if e[RETURN_RESULT] else e[RETURN_DAMAGE]/ max_damage
+        fitness.append((battle_results[i][BATTLEID_TITLE], fitness_value))
     fitness.sort(key=lambda x: x[1], reverse=True)
     return fitness
 
@@ -202,8 +203,4 @@ if __name__ == '__main__':
     read_data('job-skill.xlsx')
     population, id_to_idx = generate_first_population(10)
 
-    print(population)
-
-    mutation(population, mutation_percentage)
-    
-    print(population)
+    for i in range(iterations):
