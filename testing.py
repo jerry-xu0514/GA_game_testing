@@ -19,8 +19,9 @@ class TestMethods(unittest.TestCase):
         self.assertEqual(max(all_damages), 7337596248)
 
     def test_fitness(self):
-        fitness = GA_character_testing.fitness_func(battle_results=response, max_damage=max(all_damages))
+        fitness, population_fitness = GA_character_testing.fitness_func(battle_results=response, max_damage=max(all_damages))
         first = fitness[0][0]
+        print(fitness)
         self.assertEqual(first, 6)
     
     # def test_generate_next_gen(self):
@@ -44,13 +45,12 @@ class TestMethods(unittest.TestCase):
     def test_generate_next_gen_nodup(self):
         GA_character_testing.read_data('job-skill.xlsx')
         population, id_to_idx = GA_character_testing.generate_first_population(100)
+        print(id_to_idx)
         response2, max_damage = GA_character_testing.test_population(population)
         fitness = GA_character_testing.fitness_func(response2, max_damage)
-        id_to_idx = GA_character_testing.generate_id_to_idx(population)
         for i in range(100):
             print(i)
             population, id_to_idx = GA_character_testing.generate_new_population(population, fitness, keep_percentage, dead_percentage, mutation_percentage, population_size, id_to_idx)
-            response2, max_damage = GA_character_testing.test_population(population)
             for team in population:
                 all_jobs = set()
                 all_jobs_e = [jobs['JobId'] for jobs in team[CHARACTER_TITLE]]
@@ -58,8 +58,6 @@ class TestMethods(unittest.TestCase):
                     if(jobs['JobId'] in all_jobs): print(all_jobs_e)
                     self.assertEqual(jobs['JobId'] not in all_jobs, True)
                     all_jobs.add(jobs['JobId'])
-
-
 
 
 

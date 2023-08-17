@@ -84,7 +84,7 @@ sample template: [{"BattleId":1,"Result":1,"Milliseconds":158000,"Damage":111111
 """
 def test_population(population):
     sys.stdout.write("running simulations...\n")
-    url = 'http://10.41.0.159:8080/simulator'
+    url = 'http://172.16.22.32:8080/simulator'
     results = simulations.get_results(population, url)
     all_damages = [i['Damage'] for i in results]
     return results, max(all_damages)
@@ -236,19 +236,22 @@ def mutation(new_population, mutation_percentage):
         character[np.random.randint(0,4)] = job
 
 job_val = 1
+ind_job_id  = defaultdict(int)
 
 def mutate_dup(population):
 
     global job_val
+    global ind_job_id
+    
+    ind_job_id  = defaultdict(int)
+
     # give all job with skill sets a specific id
-    ind_job_id = defaultdict()
-    job_val = 1
     notpass = 0
 
     for teams in population:
         for job in teams[CHARACTER_TITLE]:
             job_hashkey = generate_job_hashkey(job)
-            if(job_hashkey not in ind_job_id):
+            if(ind_job_id[job_hashkey] == 0):
                 ind_job_id[job_hashkey] = job_val
                 job_val += 1
     
@@ -257,8 +260,10 @@ def mutate_dup(population):
     for team in population:
         passed = False    
         for _ in range(14):
-            team_hashkey = generate_team_hashkey(team[CHARACTER_TITLE], ind_job_id)
-            if(team_id[team_hashkey] > 2):
+            team_hashkey = generate_team_hashkey(team[CHARACTER_TITLE])
+            print(team_hashkey)
+            if(team_id[team_hashkey] > 1):
+                print('this happened')
                 mutate_skill_order(team)
                 continue
             passed = True
@@ -266,7 +271,7 @@ def mutate_dup(population):
             break
         if not passed:
             notpass += 1
-    
+    print(team_id)
     sys.stdout.write(f"this generation not passed {notpass}")
 
 
@@ -276,14 +281,37 @@ sample template: {"BattleId":1,"Characters":[{"JobId":14,"Skills":[109,110,111,1
     
 
 def mutate_skill_order(team):
-    job = team[np.random.randint(0,4)]
+    global job_val
+    global ind_job_id
+
+    job = team[CHARACTER_TITLE][np.random.randint(0,4)]
+    switch = np.random.choice(4,2)
+    print(job[SKILL_TITLE])
+    job[SKILL_TITLE][switch[0]], job[SKILL_TITLE][switch[1]]  = job[SKILL_TITLE][switch[1]], job[SKILL_TITLE][switch[0]]
+    job_hashkey = generate_job_hashkey(job)
+    if ind_job_id[job_hashkey] == 0:
+        ind_job_id = job_val
+        job_val += 1
+
 
 
 def generate_job_hashkey(job):
-    pass
+    hashkey = str(job[JOBID_TITLE])
+    for i in job[SKILL_TITLE]:
+        hashkey += str(i)
+    return hashkey
 
-def generate_team_hashkey(team, ind_job_id):
-    pass
+def generate_team_hashkey(team):
+    global ind_job_id
+
+    hashkey = ""
+    teamlist = []
+    for job in team:
+        teamlist.append(generate_job_hashkey(job))
+    sorted(teamlist)
+    for jh in teamlist:
+        hashkey += str(jh)
+    return hashkey
 
 def check_dup(population):
     for team in population:
@@ -296,22 +324,26 @@ def check_dup(population):
 
 if __name__ == '__main__':
     # parameters:
-    population_size = 500
-    number_to_store_per_gen = 3
+    population_size = 1000
+    number_to_store_per_gen = 5
     mutation_percentage = 0.1
     keep_percentage = 0.2
     dead_percentage = 0.2
     iterations = 300
     number_to_store_per_gen_trend = 20
-    storage_txt = "results/10_49_00_aug_16/test.txt"
+    storage_directory = "/try2august17/"
+
     job_skill_file = "job-skill.xlsx"
-    population_store = "results/10_49_00_aug_16/test.json"
-    best_store = "results/10_49_00_aug_16/best.json"
-    trend_store = "results/10_49_00_aug_16/trend.json"
+
+    storage_txt = "results" + storage_directory + "test.txt"
+    population_store = "results" + storage_directory + "test.json"
+    best_store = "results" + storage_directory + "best.json"
+    trend_store = "results" + storage_directory + "trend.json"
 
     trend = []
 
     read_data(job_skill_file)
+
     population, id_to_idx = generate_first_population(population_size)
     max_fitness = 0
 
