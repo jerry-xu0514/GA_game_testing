@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import sys
 import time
+from collections import defaultdict
 import simulations
-import json
 
 BATTLEID_TITLE = 'BattleId'
 JOBID_TITLE = 'JobId'
@@ -19,7 +19,7 @@ population_warning = True
 job_to_skills = {}
 
 # TODO: skill mutation
-
+# TODO: mutate duplicated items
 """
 read data from excel
 returns a dictionary of job_id to list of skill_ids
@@ -100,7 +100,8 @@ def fitness_func(battle_results, max_damage):
         fitness_value = 2 + 1 / int(e[RETURN_TIME]/1000) if e[RETURN_RESULT] else e[RETURN_DAMAGE]/ max_damage
         fitness.append((battle_results[i][BATTLEID_TITLE], fitness_value))
     fitness.sort(key=lambda x: x[1], reverse=True)
-    return fitness
+    population_fitness = sum(i[1] for i in fitness)
+    return fitness, population_fitness
 
 """
 given a sorted population, generate a new population
@@ -158,7 +159,7 @@ def one_point_crossover(new_population, prev_population, fitness, dead_percentag
         if cross_neighbor:
             parent1, parent2 = prev_population[idx], prev_population[id_to_idx[fitness[i+1][0]]]
         else:
-            parent1, parent2 = prev_population[idx], prev_population[np.random.randint(0,population_size)]
+            parent1, parent2 = prev_population[idx], prev_population[id_to_idx[fitness[np.random.randint(0,int( (1-dead_percentage) * population_size))]]]
 
         all_parent1_jobs = [jobs[JOBID_TITLE] for jobs in parent1[CHARACTER_TITLE]]
 
@@ -209,6 +210,13 @@ def store_population(filename, population_to_store, fitness, prev_population, ge
 def store_entire(filename, population):
     simulations.store(filename, population)
 
+def record_trend(trend, population, fitness, number_to_store_per_gen_trend, id_to_idx):
+    this_gen = []
+    for i in range(number_to_store_per_gen_trend):
+        idx = id_to_idx[fitness[i][0]]
+        this_gen.append(population[idx])
+    trend.append(this_gen)
+
 """
 Randomly changes certain jobs in a team with a new job that is not in the exisiting party
 """
@@ -227,6 +235,56 @@ def mutation(new_population, mutation_percentage):
         job[SKILL_TITLE] = np.random.choice(job_to_skills[job_id], 4, replace=False).tolist()
         character[np.random.randint(0,4)] = job
 
+job_val = 1
+
+def mutate_dup(population):
+
+    global job_val
+    # give all job with skill sets a specific id
+    ind_job_id = defaultdict()
+    job_val = 1
+    notpass = 0
+
+    for teams in population:
+        for job in teams[CHARACTER_TITLE]:
+            job_hashkey = generate_job_hashkey(job)
+            if(job_hashkey not in ind_job_id):
+                ind_job_id[job_hashkey] = job_val
+                job_val += 1
+    
+    team_id = defaultdict(int)
+
+    for team in population:
+        passed = False    
+        for _ in range(14):
+            team_hashkey = generate_team_hashkey(team[CHARACTER_TITLE], ind_job_id)
+            if(team_id[team_hashkey] > 2):
+                mutate_skill_order(team)
+                continue
+            passed = True
+            team_id[team_hashkey] += 1
+            break
+        if not passed:
+            notpass += 1
+    
+    sys.stdout.write(f"this generation not passed {notpass}")
+
+
+"""
+sample template: {"BattleId":1,"Characters":[{"JobId":14,"Skills":[109,110,111,112]},{"JobId":15,"Skills":[104,103,106,107]},{"JobId":16,"Skills":[446,448,449,447]},{"JobId":17,"Skills":[1116,1119,1117,1118]}]}
+"""
+    
+
+def mutate_skill_order(team):
+    job = team[np.random.randint(0,4)]
+
+
+def generate_job_hashkey(job):
+    pass
+
+def generate_team_hashkey(team, ind_job_id):
+    pass
+
 def check_dup(population):
     for team in population:
         all_jobs = set()
@@ -238,29 +296,41 @@ def check_dup(population):
 
 if __name__ == '__main__':
     # parameters:
-    population_size = 10
-    number_to_store_per_gen = 5
+    population_size = 500
+    number_to_store_per_gen = 3
     mutation_percentage = 0.1
     keep_percentage = 0.2
     dead_percentage = 0.2
-    iterations = 2
-    storage_txt = "results/test.txt"
+    iterations = 300
+    number_to_store_per_gen_trend = 20
+    storage_txt = "results/10_49_00_aug_16/test.txt"
     job_skill_file = "job-skill.xlsx"
-    population_store = "results/test.json"
+    population_store = "results/10_49_00_aug_16/test.json"
+    best_store = "results/10_49_00_aug_16/best.json"
+    trend_store = "results/10_49_00_aug_16/trend.json"
+
+    trend = []
 
     read_data(job_skill_file)
     population, id_to_idx = generate_first_population(population_size)
+    max_fitness = 0
 
     for i in range(iterations):
         start = time.time()
         results, max_damage = test_population(population)
-        fitness = fitness_func(battle_results=results, max_damage=max_damage)
+        fitness, population_fitness = fitness_func(battle_results=results, max_damage=max_damage)
         store_population(storage_txt, number_to_store_per_gen, fitness, population, i, id_to_idx, max_damage, results)
+
+        mutation_percentage = max(mutation_percentage * 0.95, 0.05)
+
+        max_fitness = max(max_fitness, population_fitness)
+        if max_fitness == population_fitness:
+            store_entire(best_store, population)
+        record_trend(trend, population, fitness, number_to_store_per_gen_trend, id_to_idx)
+        
         population, id_to_idx = generate_new_population(population, fitness, keep_percentage, dead_percentage, mutation_percentage, population_size, id_to_idx)
         end = time.time()
         sys.stdout.write(f"generation {i} took {end - start} seconds\n")
 
-        mutation_percentage = max(mutation_percentage * 0.95, 0.05)
-
-    
+    store_entire(trend_store, trend)
     store_entire(population_store, population)

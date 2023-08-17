@@ -24,8 +24,6 @@ def get_results(population, url = 'http://10.41.0.159:8080/simulator'):
 
     response = requests.post(url, json=loaded_population, headers=headers)
 
-    sys.stdout.write("getting results...\n")
-
     return response.json()
 
 def store(filename, population):
