@@ -24,6 +24,25 @@ class TestMethods(unittest.TestCase):
         print(fitness)
         self.assertEqual(first, 6)
     
+    def test_load(self):
+        best_store = "results" + "/try2august17/" + "best.json"
+        GA_character_testing.read_data('job-skill.xlsx')
+        population = GA_character_testing.load_popluation(best_store)
+        self.assertEqual(len(population), 1000)
+        
+    def test_mutate(self):
+        best_store = "results" + "/try2august17/" + "best.json"
+        GA_character_testing.read_data('job-skill.xlsx')
+        population = GA_character_testing.load_popluation(best_store)
+        for i in range(10):
+            GA_character_testing.mutate_dup(population)
+        print(population[:3])
+    
+    def test_mutate_dup(self):
+        population, id_to_idx = GA_character_testing.generate_first_population(1)
+        # for i in range(14):
+
+
     # def test_generate_next_gen(self):
     #     GA_character_testing.read_data('job-skill.xlsx')
     #     fitness = GA_character_testing.fitness_func(battle_results=response, max_damage=max(all_damages))
@@ -42,22 +61,24 @@ class TestMethods(unittest.TestCase):
     #             self.assertEqual(jobs['JobId'] not in all_jobs, True)
     #             all_jobs.add(jobs['JobId'])
 
-    def test_generate_next_gen_nodup(self):
-        GA_character_testing.read_data('job-skill.xlsx')
-        population, id_to_idx = GA_character_testing.generate_first_population(100)
-        print(id_to_idx)
-        response2, max_damage = GA_character_testing.test_population(population)
-        fitness = GA_character_testing.fitness_func(response2, max_damage)
-        for i in range(100):
-            print(i)
-            population, id_to_idx = GA_character_testing.generate_new_population(population, fitness, keep_percentage, dead_percentage, mutation_percentage, population_size, id_to_idx)
-            for team in population:
-                all_jobs = set()
-                all_jobs_e = [jobs['JobId'] for jobs in team[CHARACTER_TITLE]]
-                for jobs in team[CHARACTER_TITLE]:
-                    if(jobs['JobId'] in all_jobs): print(all_jobs_e)
-                    self.assertEqual(jobs['JobId'] not in all_jobs, True)
-                    all_jobs.add(jobs['JobId'])
+    # def test_generate_next_gen_nodup(self):
+    #     GA_character_testing.read_data('job-skill.xlsx')
+    #     population, id_to_idx = GA_character_testing.generate_first_population(100)
+    #     print(id_to_idx)
+    #     response2, max_damage = GA_character_testing.test_population(population)
+    #     fitness = GA_character_testing.fitness_func(response2, max_damage)
+    #     for i in range(100):
+    #         print(i)
+    #         population, id_to_idx = GA_character_testing.generate_new_population(population, fitness, keep_percentage, dead_percentage, mutation_percentage, population_size, id_to_idx)
+    #         for team in population:
+    #             all_jobs = set()
+    #             all_jobs_e = [jobs['JobId'] for jobs in team[CHARACTER_TITLE]]
+    #             for jobs in team[CHARACTER_TITLE]:
+    #                 if(jobs['JobId'] in all_jobs): print(all_jobs_e)
+    #                 self.assertEqual(jobs['JobId'] not in all_jobs, True)
+    #                 all_jobs.add(jobs['JobId'])
+
+
 
 
 

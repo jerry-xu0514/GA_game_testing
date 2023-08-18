@@ -4,6 +4,8 @@ import sys
 import time
 from collections import defaultdict
 import simulations
+import copy
+import json
 
 BATTLEID_TITLE = 'BattleId'
 JOBID_TITLE = 'JobId'
@@ -18,6 +20,9 @@ battle_id = 0
 population_warning = True
 job_to_skills = {}
 job_val = 1
+
+# TODO: skill gene mutation, don't let the existence of any job configuration exceed a certain number
+# TODO: mutate and generate a random new skill
 
 """
 read data from excel
@@ -118,6 +123,8 @@ def generate_new_population(prev_population, fitness, keep_percentage, dead_perc
     # sys.stdout.write("genearting new population... \n")
     global battle_id
     global job_to_skills
+    global population_warning
+
     if(keep_percentage != dead_percentage and population_warning):
         sys.stderr.write(f'[WARNING]: {keep_percentage} DOES NOT EQUAL TO {dead_percentage}, WILL CAUSE POPULATION SIZE TO VARY')
         population_warning = False
@@ -130,7 +137,7 @@ def generate_new_population(prev_population, fitness, keep_percentage, dead_perc
         battle_id += 1
         new_population.append(new_character)
     one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size, id_to_idx)
-    # mutation(new_population, mutation_percentage)
+    mutation(new_population, mutation_percentage)
     check_dup(new_population)
     mutate_dup(new_population)
     return new_population, generate_id_to_idx(new_population)
@@ -158,9 +165,37 @@ def one_point_crossover(new_population, prev_population, fitness, dead_percentag
         # take previous population index i, and randomly choose one_point_crossover with i+1, majority inherited from parent1 
         idx = id_to_idx[fitness[i][0]]
         if cross_neighbor:
-            parent1, parent2 = prev_population[idx], prev_population[id_to_idx[fitness[i+1][0]]]
+            parent1, parent2 = copy.deepcopy(prev_population[idx]), copy.deepcopy(prev_population[id_to_idx[fitness[i+1][0]]])
         else:
-            parent1, parent2 = prev_population[idx], prev_population[id_to_idx[fitness[np.random.randint(0,int( (1-dead_percentage) * population_size))]]]
+            parent1, parent2 = copy.deepcopy(prev_population[idx]), copy.deepcopy(prev_population[id_to_idx[fitness[np.random.randint(0,int( (1-dead_percentage) * population_size))]]])
+
+        all_parent1_jobs = [jobs[JOBID_TITLE] for jobs in parent1[CHARACTER_TITLE]]
+
+        crossover_trait = np.random.randint(0,4)
+        crossover_job = parent2[CHARACTER_TITLE][crossover_trait][JOBID_TITLE]
+        new_character_jobs = []
+        if crossover_job not in all_parent1_jobs:
+            for i in range(4):
+                new_character_jobs.append(parent1[CHARACTER_TITLE][i] if i != crossover_trait else parent2[CHARACTER_TITLE][i])
+        else:
+            for i, e in enumerate(all_parent1_jobs):
+                if e == crossover_job:
+                    to_switch = i
+            for i in range(4):
+                new_character_jobs.append(parent1[CHARACTER_TITLE][i] if i != to_switch else parent2[CHARACTER_TITLE][crossover_trait])
+        new_character[CHARACTER_TITLE] = new_character_jobs
+        new_population.append(new_character)
+    cross_neighbor = True
+    for i in range(150):
+        new_character = {}
+        new_character[BATTLEID_TITLE] = battle_id
+        battle_id += 1
+        # take previous population index i, and randomly choose one_point_crossover with i+1, majority inherited from parent1 
+        idx = id_to_idx[fitness[i][0]]
+        if cross_neighbor:
+            parent1, parent2 = copy.deepcopy(prev_population[idx]), copy.deepcopy(prev_population[id_to_idx[fitness[i+1][0]]])
+        else:
+            parent1, parent2 = copy.deepcopy(prev_population[idx]), copy.deepcopy(prev_population[id_to_idx[fitness[np.random.randint(0,int( (1-dead_percentage) * population_size))]]])
 
         all_parent1_jobs = [jobs[JOBID_TITLE] for jobs in parent1[CHARACTER_TITLE]]
 
@@ -207,6 +242,16 @@ def store_population(filename, population_to_store, fitness, prev_population, ge
             f.write("\t" + str(results[ridx]) + "\n")
         f.write('\n')
 
+def generate_new_characters():
+    skills = []
+    job_ids = np.random.choice(list(job_to_skills.keys()), 5, replace=False)
+    for job_id in job_ids:
+        job = {}
+        job[JOBID_TITLE] = job_id
+        skill = np.random.choice(job_to_skills[job_id], 4, replace=False).tolist()
+        skills.append(skill)
+
+    return job_ids, skills
 
 def store_entire(filename, population):
     simulations.store(filename, population)
@@ -254,10 +299,13 @@ def mutate_dup(population, ind_job_id=defaultdict(int)):
 
     for team in population:
         passed = False    
-        for _ in range(14):
+        for i in range(11):
+            if i > 9:
+                mutate_skill(team[CHARACTER_TITLE], ind_job_id)
+                break
             team_hashkey = generate_team_hashkey(team[CHARACTER_TITLE], ind_job_id)
 
-            if(team_id[team_hashkey] > 1):
+            if(team_id[team_hashkey] > 2):
                 mutate_skill_order(team[CHARACTER_TITLE], ind_job_id)
                 continue
             passed = True
@@ -267,7 +315,30 @@ def mutate_dup(population, ind_job_id=defaultdict(int)):
             notpass += 1
 
     if notpass > 0: sys.stdout.write(f"this generation not passed {notpass}\n")
+    sys.stdout.write(f'{len(ind_job_id)}\n')
 
+def mutate_skill(team, ind_job_id):
+    global job_to_skills
+    global job_val
+    team_num = np.random.randint(0,4)
+    job = team[team_num][JOBID_TITLE]
+    skill_pool = np.random.choice(job_to_skills[job], 4, replace = False).tolist()
+    to_replace = np.random.randint(0,4)
+    for skill in skill_pool:
+        if skill not in team[team_num][SKILL_TITLE]:
+            team[team_num][SKILL_TITLE][to_replace] = skill
+            break
+    job_hashkey =  generate_job_hashkey(team[team_num])
+    if(ind_job_id[job_hashkey] == 0):
+        ind_job_id[job_hashkey] = job_val
+        job_val += 1
+
+
+def load_popluation(filepath):
+    with open(filepath, 'r') as f:
+        population = json.load(f)
+    
+    return population
 
 """
 sample template: {"BattleId":1,"Characters":[{"JobId":14,"Skills":[109,110,111,112]},{"JobId":15,"Skills":[104,103,106,107]},{"JobId":16,"Skills":[446,448,449,447]},{"JobId":17,"Skills":[1116,1119,1117,1118]}]}
@@ -284,7 +355,6 @@ def mutate_skill_order(team, ind_job_id=defaultdict(int)):
         job_val += 1
 
 def generate_job_hashkey(job):
-    print(job)
     hashkey = str(job[JOBID_TITLE])
     for i in job[SKILL_TITLE]:
         hashkey += str(i)
@@ -320,8 +390,8 @@ if __name__ == '__main__':
     # parameters:
     population_size = 1000
     number_to_store_per_gen = 5
-    mutation_percentage = 0.1
-    keep_percentage = 0.2
+    mutation_percentage = 0.05
+    keep_percentage = 0.05
     dead_percentage = 0.2
     iterations = 300
     number_to_store_per_gen_trend = 20
@@ -347,7 +417,7 @@ if __name__ == '__main__':
         fitness, population_fitness = fitness_func(battle_results=results, max_damage=MAX_DAMAGE)
         store_population(storage_txt, number_to_store_per_gen, fitness, population, i, id_to_idx, max_damage, results)
 
-        mutation_percentage = max(mutation_percentage * 0.95, 0.05)
+        # mutation_percentage = min(mutation_percentage * 1.1, 0.2)
 
         max_fitness = max(max_fitness, population_fitness)
         if max_fitness == population_fitness:
