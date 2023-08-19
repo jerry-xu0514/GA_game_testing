@@ -408,7 +408,8 @@ if __name__ == '__main__':
 
     read_data(job_skill_file)
 
-    population, id_to_idx = generate_first_population(population_size)
+    population = load_popluation(best_store)
+    id_to_idx = generate_id_to_idx(population)
     max_fitness = 0
 
     for i in range(iterations):
