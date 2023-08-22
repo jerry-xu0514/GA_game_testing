@@ -21,33 +21,27 @@ population_warning = True
 job_to_skills = {}
 job_val = 1
 
-# TODO: skill gene mutation, don't let the existence of any job configuration exceed a certain number
-# TODO: mutate and generate a random new skill
-
 """
 read data from excel
 returns a dictionary of job_id to list of skill_ids
 """
 def read_data(file_path):
-    global battle_id
     global job_to_skills
-    print(f"reading data from {file_path}...")
     xls = pd.ExcelFile(file_path)
     jobs = pd.read_excel(xls, 'job')
     skills = pd.read_excel(xls, 'skill')
 
-    # just take the first 7
     for i in range(8):
         job_id = jobs.loc[:7, 'job_id'][i]
-        skills_id = []
+        skills_id = {}
         job_to_skills[job_id] = skills_id
-
-    # for skill in skills.loc:
+    
     for index, row in skills.iterrows():
-        skill_id = row['id']
-        job_id = row['job_id']
-        assert job_id in job_to_skills, f"job_id {job_id} not in job_to_skills"
-        job_to_skills[job_id].append(skill_id)
+        assert row['job_id'] in job_to_skills, f'{row["job_id"]} is not in the job_to_skills dictionary'
+        if row['sign'] not in job_to_skills[row['job_id']]:
+            job_to_skills[row['job_id']][row['sign']] = set()
+        job_to_skills[row['job_id']][row['sign']].add(row['id'])
+    
 
 """
 generates a random population of size n
@@ -55,9 +49,6 @@ sample template: '[{"BattleId":1,"Characters":[{"JobId":14,"Skills":[109,110,111
 """
 def generate_first_population(population_size):
     # sys.stdout.write("generating first population...\n")
-
-    global battle_id
-    global job_to_skills
     population = []
     for i in range(population_size):
         population.append(generate_character())
@@ -78,16 +69,20 @@ def generate_character():
     for job_id in job_ids:
         job = {}
         job[JOBID_TITLE] = job_id
-        job[SKILL_TITLE] = np.random.choice(job_to_skills[job_id], 4, replace=False).tolist()
+        job[SKILL_TITLE] = []
+        signs = np.random.choice(list(job_to_skills[job_id].keys()), 4, replace=False)
+        for sign in signs:
+               job[SKILL_TITLE].append(np.random.choice(list(job_to_skills[job_id][sign]), 1, replace=False)[0])
         character[CHARACTER_TITLE].append(job)
     return character
 
 """
 the function that converts population into json and tests
 returns json file
-sample template: [{"BattleId":1,"Result":1,"Milliseconds":158000,"Damage":1111111111}]
+sample return: [{"BattleId":1,"Result":1,"Milliseconds":158000,"Damage":1111111111}]
 """
 def test_population(population):
+
     # sys.stdout.write("running simulations...\n")
     url = 'http://172.16.22.32:8080/simulator'
     results = simulations.get_results(population, url)
@@ -152,7 +147,7 @@ returns a list of new characters
     dead_population: number of population to kill
     population_size: total population size
 """     
-def one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size, id_to_idx, cross_neighbor=True):
+def one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size, id_to_idx, cross_neighbor=False):
     global battle_id
     global job_to_skills
     assert dead_percentage < 1 and dead_percentage > 0, f'you have to take out at least some of the bad genes man... but you can\'t take out more than the entire population'
@@ -242,17 +237,6 @@ def store_population(filename, population_to_store, fitness, prev_population, ge
             f.write("\t" + str(results[ridx]) + "\n")
         f.write('\n')
 
-def generate_new_characters():
-    skills = []
-    job_ids = np.random.choice(list(job_to_skills.keys()), 5, replace=False)
-    for job_id in job_ids:
-        job = {}
-        job[JOBID_TITLE] = job_id
-        skill = np.random.choice(job_to_skills[job_id], 4, replace=False).tolist()
-        skills.append(skill)
-
-    return job_ids, skills
-
 def store_entire(filename, population):
     simulations.store(filename, population)
 
@@ -270,17 +254,12 @@ def mutation(new_population, mutation_percentage):
     assert mutation_percentage < 1 and mutation_percentage >= 0, f'{mutation_percentage} must be a percent value greater than or equal to 0 and less than 1'
     to_mutate = np.random.choice(len(new_population), int(mutation_percentage * len(new_population)))
     for idx in to_mutate:
-        character = new_population[idx][CHARACTER_TITLE]
-        existing_jobs = [job[JOBID_TITLE] for job in character]
-        while True:
-            job_id = np.random.choice(list(job_to_skills.keys()), 1, replace=False)
-            if job_id not in existing_jobs: break
-        job_id = job_id[0]
-        job = {}
-        job[JOBID_TITLE] = job_id
-        job[SKILL_TITLE] = np.random.choice(job_to_skills[job_id], 4, replace=False).tolist()
-        character[np.random.randint(0,4)] = job
+        # TODO
+        pass
 
+"""
+mutate duplicated teams
+"""
 def mutate_dup(population, ind_job_id=defaultdict(int)):
 
     global job_val
@@ -317,21 +296,14 @@ def mutate_dup(population, ind_job_id=defaultdict(int)):
     if notpass > 0: sys.stdout.write(f"this generation not passed {notpass}\n")
     sys.stdout.write(f'{len(ind_job_id)}\n')
 
+"""
+given an entire team, choose a random job and mutate one random skin within that job
+"""
 def mutate_skill(team, ind_job_id):
     global job_to_skills
     global job_val
-    team_num = np.random.randint(0,4)
-    job = team[team_num][JOBID_TITLE]
-    skill_pool = np.random.choice(job_to_skills[job], 4, replace = False).tolist()
-    to_replace = np.random.randint(0,4)
-    for skill in skill_pool:
-        if skill not in team[team_num][SKILL_TITLE]:
-            team[team_num][SKILL_TITLE][to_replace] = skill
-            break
-    job_hashkey =  generate_job_hashkey(team[team_num])
-    if(ind_job_id[job_hashkey] == 0):
-        ind_job_id[job_hashkey] = job_val
-        job_val += 1
+    # TODO
+    pass
 
 
 def load_popluation(filepath):
