@@ -20,6 +20,7 @@ battle_id = 0
 population_warning = True
 job_to_skills = {}
 job_val = 1
+skills_to_sign = {}
 
 """
 read data from excel
@@ -27,6 +28,7 @@ returns a dictionary of job_id to list of skill_ids
 """
 def read_data(file_path):
     global job_to_skills
+    global skills_to_sign
     xls = pd.ExcelFile(file_path)
     jobs = pd.read_excel(xls, 'job')
     skills = pd.read_excel(xls, 'skill')
@@ -41,6 +43,7 @@ def read_data(file_path):
         if row['sign'] not in job_to_skills[row['job_id']]:
             job_to_skills[row['job_id']][row['sign']] = set()
         job_to_skills[row['job_id']][row['sign']].add(row['id'])
+        skills_to_sign[row['id']] = row['sign']
     
 
 """
@@ -86,6 +89,7 @@ def test_population(population):
     # sys.stdout.write("running simulations...\n")
     url = 'http://172.16.22.32:8080/simulator'
     results = simulations.get_results(population, url)
+    # print(results)
     all_damages = [i['Damage'] for i in results]
     return results, max(all_damages)
 
@@ -133,9 +137,48 @@ def generate_new_population(prev_population, fitness, keep_percentage, dead_perc
         new_population.append(new_character)
     one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size, id_to_idx)
     mutation(new_population, mutation_percentage)
+    mutate_dup_skill(new_population)
     # check_dup(new_population)
     # mutate_dup(new_population)
     return new_population, generate_id_to_idx(new_population)
+
+def mutate_dup_skill(population):
+
+    ind_job_id = defaultdict(int)
+    id_to_job = {}
+    for team in population:
+        for job in team['Characters']:
+            hashkey = generate_job_hashkey(job)
+            ind_job_id[hashkey] += 1
+            if hashkey not in id_to_job:
+                id_to_job[hashkey] = []
+            id_to_job[hashkey].append(job)
+    
+    for key in ind_job_id:
+        if ind_job_id[key] >= 25:
+            for job in id_to_job[key]:
+                mutate_skill(job)
+        elif ind_job_id[key] >= 10:
+            for job in id_to_job[key]:
+                if np.random.randint(0,10) >= 7:
+                    mutate_skill_order2(job)
+
+def mutate_skill(job):
+    global job_to_skills
+    global skills_to_sign
+
+    job_id = job[JOBID_TITLE]
+    new_signs = np.random.choice(list(job_to_skills[job_id].keys()), 5, replace=False)
+    signs = [skills_to_sign[i] for i in job[SKILL_TITLE]]
+    if np.random.randint(0,2) == 0:
+        for sign in new_signs:
+            if sign not in signs:
+                job[SKILL_TITLE][np.random.randint(0,4)] = np.random.choice(list(job_to_skills[job_id][sign]), 1, replace=False)[0]
+    else:
+        to_change = np.random.randint(0,4)
+        sign = skills_to_sign[job[SKILL_TITLE][to_change]]
+        job[SKILL_TITLE][to_change] = np.random.choice(list(job_to_skills[job_id][sign]), 1, replace=False)[0]
+
 
 """
 generates a portion of the new population by one point crossover
@@ -323,6 +366,15 @@ def mutate_skill_order(team, ind_job_id=defaultdict(int)):
         ind_job_id = job_val
         job_val += 1
 
+def mutate_skill_order2(job, ind_job_id=defaultdict(int)):
+    global job_val
+    switch = np.random.choice(4,2)
+    job[SKILL_TITLE][switch[0]], job[SKILL_TITLE][switch[1]]  = job[SKILL_TITLE][switch[1]], job[SKILL_TITLE][switch[0]]
+    job_hashkey = generate_job_hashkey(job)
+    if ind_job_id[job_hashkey] == 0:
+        ind_job_id = job_val
+        job_val += 1
+
 def generate_job_hashkey(job):
     hashkey = str(job[JOBID_TITLE])
     for i in job[SKILL_TITLE]:
@@ -382,7 +434,7 @@ if __name__ == '__main__':
 
     population, id_to_idx = generate_first_population(population_size)
     max_fitness = 0
-
+    print(population[0])
     for i in range(iterations):
         start = time.time()
         results, max_damage = test_population(population)

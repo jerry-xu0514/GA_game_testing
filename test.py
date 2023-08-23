@@ -9,21 +9,18 @@ ind_job_id = defaultdict(int)
 
 for team in population:
     for job in team['Characters']:
-        job_hash = GA_character_testing.generate_job_hashkey(job)
-        if ind_job_id[job_hash] == 0:
-            ind_job_id[job['JobId']] = job_val
-            job_val += 1
+        hashkey = GA_character_testing.generate_job_hashkey(job)
+        ind_job_id[hashkey] += 1
+
+counter = 0
+for key in ind_job_id:
+    if ind_job_id[key] >= 2:
+        print(key, ind_job_id[key])
+        counter += 1
+
+print(counter)
 
 for team in population:
-    hashkey = GA_character_testing.generate_team_hashkey(team['Characters'], ind_job_id)
-    if hashkey == '228228228228':
-        print(team)
-    teams[hashkey] += 1
-
-for team in teams:
-    if teams[team] >= 4: print(team, teams[team])
-
-for team in population:
-    hashkey = GA_character_testing.generate_team_hashkey(team['Characters'], ind_job_id)
-    if hashkey == '228228228228':
-        print(team)
+    for job in team['Characters']:
+        if GA_character_testing.generate_job_hashkey(job) == '151324128312791942':
+            print(job)
