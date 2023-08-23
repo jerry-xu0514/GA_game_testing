@@ -147,7 +147,7 @@ returns a list of new characters
     dead_population: number of population to kill
     population_size: total population size
 """     
-def one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size, id_to_idx, cross_neighbor=False):
+def one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size, id_to_idx, cross_neighbor=True):
     global battle_id
     global job_to_skills
     assert dead_percentage < 1 and dead_percentage > 0, f'you have to take out at least some of the bad genes man... but you can\'t take out more than the entire population'
@@ -181,7 +181,7 @@ def one_point_crossover(new_population, prev_population, fitness, dead_percentag
         new_character[CHARACTER_TITLE] = new_character_jobs
         new_population.append(new_character)
     cross_neighbor = True
-    for i in range(150):
+    for i in range(int(population_size * 0.15)):
         new_character = {}
         new_character[BATTLEID_TITLE] = battle_id
         battle_id += 1
@@ -254,19 +254,25 @@ def mutation(new_population, mutation_percentage):
     assert mutation_percentage < 1 and mutation_percentage >= 0, f'{mutation_percentage} must be a percent value greater than or equal to 0 and less than 1'
     to_mutate = np.random.choice(len(new_population), int(mutation_percentage * len(new_population)))
     for idx in to_mutate:
-        # TODO
-        pass
+        mutate(new_population[idx][CHARACTER_TITLE])
+
+def mutate(team):
+    global job_to_skills
+
+    job_ids = np.random.choice(list(job_to_skills.keys()), 5, replace=False)
+    for job in job_ids:
+        if job not in [jobs[JOBID_TITLE] for jobs in team]:
+            to_change = np.random.randint(0,4)
+            team[to_change][JOBID_TITLE] = job
+            signs = np.random.choice(list(job_to_skills[job].keys()), 4, replace=False)
+            for sign in signs:
+                team[to_change][SKILL_TITLE][np.random.randint(0,4)] = np.random.choice(list(job_to_skills[job][sign]), 1, replace=False)[0]
 
 """
 mutate duplicated teams
 """
 def mutate_dup(population, ind_job_id=defaultdict(int)):
-
     global job_val
-
-    # give all job with skill sets a specific id
-    notpass = 0
-
     for teams in population:
         for job in teams[CHARACTER_TITLE]:
             job_hashkey = generate_job_hashkey(job)
@@ -276,35 +282,11 @@ def mutate_dup(population, ind_job_id=defaultdict(int)):
     
     team_id = defaultdict(int)
 
-    for team in population:
-        passed = False    
-        for i in range(11):
-            if i > 9:
-                mutate_skill(team[CHARACTER_TITLE], ind_job_id)
-                break
-            team_hashkey = generate_team_hashkey(team[CHARACTER_TITLE], ind_job_id)
-
-            if(team_id[team_hashkey] > 2):
-                mutate_skill_order(team[CHARACTER_TITLE], ind_job_id)
-                continue
-            passed = True
-            team_id[team_hashkey] += 1
-            break
-        if not passed:
-            notpass += 1
-
-    if notpass > 0: sys.stdout.write(f"this generation not passed {notpass}\n")
-    sys.stdout.write(f'{len(ind_job_id)}\n')
-
-"""
-given an entire team, choose a random job and mutate one random skin within that job
-"""
-def mutate_skill(team, ind_job_id):
-    global job_to_skills
-    global job_val
-    # TODO
-    pass
-
+    for team in population:   
+        team_hashkey = generate_team_hashkey(team[CHARACTER_TITLE], ind_job_id)
+        if(team_id[team_hashkey] > 3):
+            team = generate_character()
+            continue
 
 def load_popluation(filepath):
     with open(filepath, 'r') as f:
@@ -367,9 +349,9 @@ if __name__ == '__main__':
     dead_percentage = 0.2
     iterations = 300
     number_to_store_per_gen_trend = 20
-    storage_directory = "/try2august17/"
+    storage_directory = "/10_49_00_aug_23/"
 
-    job_skill_file = "job-skill.xlsx"
+    job_skill_file = "job-skill-separated.xlsx"
 
     storage_txt = "results" + storage_directory + "test.txt"
     population_store = "results" + storage_directory + "test.json"
@@ -380,8 +362,10 @@ if __name__ == '__main__':
 
     read_data(job_skill_file)
 
-    population = load_popluation(best_store)
-    id_to_idx = generate_id_to_idx(population)
+    # population = load_popluation(best_store)
+    # id_to_idx = generate_id_to_idx(population)
+
+    population, id_to_idx = generate_first_population(population_size)
     max_fitness = 0
 
     for i in range(iterations):

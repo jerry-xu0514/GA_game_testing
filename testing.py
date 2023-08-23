@@ -26,19 +26,20 @@ class TestMethods(unittest.TestCase):
     
     def test_load(self):
         best_store = "results" + "/try2august17/" + "best.json"
-        GA_character_testing.read_data('job-skill.xlsx')
+        GA_character_testing.read_data('job-skill-separated.xlsx')
         population = GA_character_testing.load_popluation(best_store)
         self.assertEqual(len(population), 1000)
         
     def test_mutate(self):
         best_store = "results" + "/try2august17/" + "best.json"
-        GA_character_testing.read_data('job-skill.xlsx')
+        GA_character_testing.read_data('job-skill-separated.xlsx')
         population = GA_character_testing.load_popluation(best_store)
         for i in range(10):
             GA_character_testing.mutate_dup(population)
         print(population[:3])
     
     def test_mutate_dup(self):
+        GA_character_testing.read_data("job-skill-separated.xlsx")
         population, id_to_idx = GA_character_testing.generate_first_population(1)
         # for i in range(14):
 
