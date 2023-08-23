@@ -133,8 +133,8 @@ def generate_new_population(prev_population, fitness, keep_percentage, dead_perc
         new_population.append(new_character)
     one_point_crossover(new_population, prev_population, fitness, dead_percentage, population_size, id_to_idx)
     mutation(new_population, mutation_percentage)
-    check_dup(new_population)
-    mutate_dup(new_population)
+    # check_dup(new_population)
+    # mutate_dup(new_population)
     return new_population, generate_id_to_idx(new_population)
 
 """
@@ -279,14 +279,29 @@ def mutate_dup(population, ind_job_id=defaultdict(int)):
             if(ind_job_id[job_hashkey] == 0):
                 ind_job_id[job_hashkey] = job_val
                 job_val += 1
-    
+
     team_id = defaultdict(int)
 
     for team in population:   
+        for i in range(11):
+            if i == 9:
+                team = generate_character()
+                team_hashkey = generate_team_hashkey(team[CHARACTER_TITLE], ind_job_id)
+                team_id[team_hashkey] += 1
+                break
+            team_hashkey = generate_team_hashkey(team[CHARACTER_TITLE], ind_job_id)
+            if(team_id[team_hashkey] > 3):
+                mutate_skill_order(team[CHARACTER_TITLE], ind_job_id)
+                continue
+            else:
+                team_id[team_hashkey] += 1
+                break
+    
+    team_id = defaultdict(int)
+    for team in population:
         team_hashkey = generate_team_hashkey(team[CHARACTER_TITLE], ind_job_id)
-        if(team_id[team_hashkey] > 3):
-            team = generate_character()
-            continue
+        team_id[team_hashkey] += 1
+        if team_id[team_hashkey] > 4: print(f'{team_hashkey} is duplicated more than 4 times')
 
 def load_popluation(filepath):
     with open(filepath, 'r') as f:
@@ -331,8 +346,8 @@ def generate_team_hashkey(team, ind_job_id):
     return hashkey
 
 def check_dup(population):
+    all_jobs = set()
     for team in population:
-        all_jobs = set()
         all_jobs_e = [jobs['JobId'] for jobs in team[CHARACTER_TITLE]]
         for jobs in team[CHARACTER_TITLE]:
             assert jobs['JobId'] not in all_jobs, f'duplates found {all_jobs_e}'
