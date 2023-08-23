@@ -395,7 +395,7 @@ if __name__ == '__main__':
     dead_percentage = 0.2
     iterations = 300
     number_to_store_per_gen_trend = 20
-    storage_directory = "/try2august17/"
+    storage_directory = "/try3august23/"
 
     job_skill_file = "job-skill.xlsx"
 
